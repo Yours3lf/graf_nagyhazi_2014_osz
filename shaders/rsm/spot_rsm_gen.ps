@@ -1,0 +1,23 @@
+
+layout(early_fragment_tests) in;
+
+layout(binding = 0) uniform sampler2D albedo_tex;
+
+in vec2 texcoord;
+in vec3 vs_normal;
+
+out vec4 color;
+
+#include "common.h"
+
+void main()
+{
+  vec4 albedo = texture( albedo_tex, texcoord );
+
+  if( albedo.w < 0.0001 )
+    discard;
+
+  vec3 normal = normalize( vs_normal );
+
+  color = encode_rsm( albedo.xyz, normal, ivec2( gl_FragCoord.xy ) );
+}

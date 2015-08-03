@@ -1,0 +1,50 @@
+#version 430 core
+
+layout(binding=0) uniform sampler2D ssao_tex;
+layout(binding=1) uniform sampler2D depth_tex;
+
+uniform vec2 direction;
+uniform float threshold;
+
+in vec2 tex_coord;
+
+layout(location=0) out vec4 color;
+
+//gauss weights set up for bilinear filtering
+float weights[6] =
+{
+  0.0103814, 0.0944704, 0.296907, 0.296907, 0.0944704, 0.0103814
+};
+
+float offsets[6] =
+{
+  -5.17647, -3.29412, -1.41176, 1.41176, 3.29412, 5.17647
+};
+
+void main()
+{
+  vec2 dir = direction / textureSize( ssao_tex, 0 ).xy;
+
+  float center_depth = texture(depth_tex, tex_coord).x;
+  float center_ao = texture(ssao_tex, tex_coord).x;
+
+  float result = center_ao * 0.196483;
+  float weight_sum = 0.196483;
+
+  float radius = 1.0;
+
+  //bilateral gauss filter
+  for(int c = 0; c < 6; c++)
+  {
+    if( abs( center_depth - texture(depth_tex, tex_coord + offsets[c] * dir).x ) < threshold )
+    {
+      result += texture( ssao_tex, tex_coord + offsets[c] * dir * radius ).x * weights[c];
+      weight_sum += weights[c];
+    }
+  }
+
+  result *= 1.0 / weight_sum;
+
+  color = vec4(result);
+  //color = vec4( center_ao );
+}

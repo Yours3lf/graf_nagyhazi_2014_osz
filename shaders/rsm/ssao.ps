@@ -1,0 +1,97 @@
+#version 430 core
+
+layout(binding=0) uniform sampler2D depth_tex;
+layout(binding=1) uniform sampler2D normal_tex;
+layout(binding=2) uniform sampler2D random_tex;
+
+uniform float near, far;
+uniform mat4 inv_mv, inv_mvp;
+uniform vec4 far_plane0;
+uniform vec2 far_plane1;
+uniform mat4 inv_view;
+
+in vec2 texcoord;
+
+out vec4 color;
+
+#include "common.h"
+
+//a is used to remedy self-occlusion
+//b and c is used to control brightness and contrast
+float tweak( float ao, float a, float b, float c )
+{
+  return pow( b * (ao + a), c );
+}
+
+float random( vec3 seed, int i )
+{
+  vec4 seed4 = vec4( seed, i );
+  float dot_product = dot( seed4, vec4( 12.9898, 78.233, 45.164, 94.673 ) );
+  return fract( sin( dot_product ) * 43758.5453123 );
+}
+
+void main()
+{
+  //reconstruct view space position
+  vec2 pos_xy = mix( far_plane0.xy, vec2(far_plane0.w, far_plane1.x), texcoord );
+  float depth = texture( depth_tex, texcoord ).x;
+  float linear_depth = linearize_depth( depth, near, far );
+  vec3 vs_pos = linear_depth_to_vs_pos( linear_depth, pos_xy, far );
+
+  //reconstruct world space position
+  vec4 ms_pos = inv_mv * vec4( vs_pos, 1 );
+
+  //reconstructed per-face world space normals
+  //vec3 ms_normal = -normalize(cross(dFdy(ms_pos.xyz), dFdx(ms_pos.xyz)));
+
+  //per-pixel world space normals
+  vec3 vs_normal = ( texture( normal_tex, texcoord ).xyz * 2 - 1 );
+  vec3 ms_normal = (inv_view * vec4(vs_normal,0)).xyz;
+
+  const int samples = 64;
+  const float radius = 3; //10
+  const float projection_factor = 0.75;
+  const float bias = 1.0;
+  const float sigma = 2.0;
+  const float epsilon = 0.001;
+  const float a = 0.0;
+  const float b = 1.0;
+  const float c = 5.0;
+
+  float projected_radius = radius * projection_factor / -vs_pos.z;
+
+  vec2 inv_random_texsize = 1.0 / textureSize( random_tex, 0 ).xy;
+
+  float ao = 0;
+
+  for( int i = 0; i < samples; ++i )
+  {
+    int index = int( samples * random( floor( ms_pos.xyz * 1000.0 ), i ) ) % samples;
+    vec2 random_dir = texture( random_tex, vec2( texcoord / inv_random_texsize * (index+1) ) ).xy * 2 - 1;
+
+    vec3 asample;
+    asample.xy = texcoord + random_dir * projected_radius;
+    asample.z = texture( depth_tex, asample.xy ).x;
+
+    //reconstruct world space position of the sample
+    vec3 ndc_sample = asample * 2 - 1;
+    vec4 tmp = inv_mvp * vec4( ndc_sample, 1 );
+    vec3 ms_sample_pos = tmp.xyz / tmp.w;
+
+    //get the difference vector
+    vec3 sample_dir = ms_sample_pos - ms_pos.xyz;
+
+    ao +=
+    //get the angle between the normal and the vector
+    max( 0, dot( sample_dir, ms_normal ) - bias ) /
+    //get the squared distance
+    ( dot( sample_dir, sample_dir ) + epsilon );
+  }
+
+  ao = tweak( max( 0, 1 - 2 * sigma / float( samples ) * ao ), a, b, c );
+
+  color = vec4( ao );
+  //color = vec4( abs( recon_ms_normal - ms_normal ), 1 );
+  //color = vec4( depth );
+  //color = vec4( 1 );
+}

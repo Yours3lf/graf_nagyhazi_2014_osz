@@ -1,0 +1,21 @@
+#version 430 core
+
+layout(binding=0) uniform sampler2D result;
+//layout(binding=1) uniform sampler2DArray array_tex[4];
+
+in vec2 tex_coord;
+
+layout(location=0) out vec4 color;
+
+#include "common.h"
+
+void main()
+{
+  color = texture( result, tex_coord );
+  //color = vec4( color.x );
+  //color = texture( array_tex[3], vec3( tex_coord, 0 ) );
+
+  //vec3 albedo, normal;
+  //decode_rsm( array_tex[3], 0, tex_coord, albedo, normal );
+  //color = vec4( normal, 1 );
+}

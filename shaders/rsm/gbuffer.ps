@@ -1,0 +1,68 @@
+
+#ifndef TRANSPARENT_DISCARD
+layout(early_fragment_tests) in;
+#endif
+
+layout(binding = 0) uniform sampler2D albedo_tex;
+#ifdef NORMAL_MAP
+layout(binding = 1) uniform sampler2D normal_tex;
+#endif
+#ifdef ROUGHNESS_MAP
+layout(binding = 2) uniform sampler2D roughness_tex;
+#endif
+
+in vec2 texcoord;
+in vec3 vs_normal;
+#ifdef NORMAL_MAP
+in vec3 vs_tangent;
+in vec3 vs_bitangent;
+#endif
+
+layout(location=0) out vec4 albedo_rt;
+layout(location=1) out vec4 normal_rt;
+
+vec3 gamma_correct( vec3 col )
+{
+  return pow( col, vec3( 2.2 ) );
+}
+
+float gamma_correct( float col )
+{
+  return pow( col, 2.2 );
+}
+
+void main()
+{
+  vec4 albedo = texture( albedo_tex, texcoord );
+
+#ifdef TRANSPARENT_DISCARD
+  if( albedo.w < 0.0001 )
+    discard;
+#endif
+
+  //albedo_rt.xyz = gamma_correct(albedo.xyz);
+  albedo_rt.xyz = albedo.xyz;
+#ifdef ROUGHNESS_MAP
+  //albedo_rt.w = gamma_correct(texture( roughness_tex, texcoord ).x);
+  albedo_rt.w = texture( roughness_tex, texcoord ).x;
+#else
+  albedo_rt.w = 1; //full rough for no roughness
+#endif
+
+#ifndef NORMAL_MAP
+  normal_rt = vec4( normalize(vs_normal) * 0.5 + 0.5, 0);
+#else
+  mat3 ts_to_vs = mat3( normalize(vs_tangent),
+                        normalize(vs_bitangent),
+                        normalize(vs_normal) );
+  vec3 pixel_normal = normalize(texture( normal_tex, texcoord ).xyz);
+  vec3 pixel_normal_ranged = pixel_normal * 2 - 1;
+  vec3 vs_pixel_normal = ts_to_vs * pixel_normal_ranged;
+  normal_rt = vec4( normalize(vs_pixel_normal) * 0.5 + 0.5, 0 ); //0 for metalness
+  //normal_rt = vec4( normalize( vs_tangent ) * 0.5 + 0.5, 0 );
+  //normal_rt = vec4( abs( length(vs_tangent) - 1 ) < 0.0001 );
+  //albedo_rt = vec4( vs_normal, 1 );
+#endif
+
+  //albedo_rt = normal_rt;
+}

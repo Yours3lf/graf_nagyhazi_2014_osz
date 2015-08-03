@@ -1,0 +1,15 @@
+#version 430 core
+
+layout(binding=0) uniform sampler2D depth;
+layout(binding=1) uniform sampler2D normals;
+
+in vec2 tex_coord;
+
+layout(location=0) out vec4 color1;
+layout(location=1) out vec4 color2;
+
+void main()
+{
+  color1 = texture( depth, tex_coord );
+  color2 = texture( normals, tex_coord );
+}
